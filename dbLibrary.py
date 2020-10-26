@@ -5,12 +5,10 @@
     Purpose: This program is made to interact with a Mongo DB I created. The app's purpose is to create game libraries for multiple people.
         The game libraries will keep track of game play count, game information, and generate a randomized game based on a game's rank in case
         players become indecisive on what to play.
-    
 """
 
 import pymongo
 from pymongo import MongoClient
-import pprint
 import math
 import random
 
@@ -20,17 +18,22 @@ db = None
 cluster = None
 
 def login():
-    login = input('DB Username: ')
+    loginUser = input('DB Username: ')
     password = input('DB Password: ')
 
     loginURL = r"mongodb+srv://%s:%s@game-library.299lb.mongodb.net/Game-Library?retryWrites=true&w=majority"
-    loginCreds = (login, password)
+    loginCreds = (loginUser, password)
 
     timeoutIter = 1
 
     global cluster
     cluster = MongoClient(loginURL % loginCreds, serverSelectionTimeoutMS=timeoutIter)
-    cluster.server_info()
+
+    try:
+        cluster.server_info()
+    except:
+        print('\nLogin Failed...\n')
+        login()
 
     global db 
     db = cluster["Game-Library"]
@@ -200,26 +203,30 @@ def chooseForMe():
 
             print('Changing rank for %s...' % selectedGame)
 
-            while counter < numOfPlayers:
-                tempCollection = db[colList[counter]]
-                tempColList = tempCollection.find({'gameName': selectedGame})
+            try:
+                while counter < numOfPlayers:
+                    tempCollection = db[colList[counter]]
+                    tempColList = tempCollection.find({'gameName': selectedGame})
 
-                currentRank = 0
-                currentPlayCount = 0
+                    currentRank = 0
+                    currentPlayCount = 0
 
-                for x in tempColList:
-                    currentRank = x['rank']
-                    currentPlayCount = x['playCount']
+                    for x in tempColList:
+                        currentRank = x['rank']
+                        currentPlayCount = x['playCount']
 
-                newRank = currentRank + 1
-                newPlayCount = currentPlayCount + 1
+                    newRank = currentRank + 1
+                    newPlayCount = currentPlayCount + 1
 
-                if newRank < 100:
-                    changeFilter = {'gameName': selectedGame}
-                    editValues = {'$set': {'rank': newRank, 'playCount': newPlayCount}}
-                    tempCollection.update_one(changeFilter, editValues)
-                
-                counter += 1
+                    if newRank < 100:
+                        changeFilter = {'gameName': selectedGame}
+                        editValues = {'$set': {'rank': newRank, 'playCount': newPlayCount}}
+                        tempCollection.update_one(changeFilter, editValues)
+                    
+                    counter += 1
+            except:
+                print('Could not write to DB...')
+                main()
             
             print('\nThe rank for %s has been increased! Have fun gaming!\n' % selectedGame)
             goToMain = input('\nDo you want to do something else?\n>>> ')
@@ -242,31 +249,37 @@ def chooseForMe():
             print('Please enter a valid response.')
             playGameBool = True
 
+#You can pass the thing just this once. It'll be our secret ;)
 #Create a function to perform the reroll function
 def doReroll(colList, numOfPlayers, selectedGame):
     counter = 0
     
     print('Rerolling...')
-    while counter < numOfPlayers:
-        tempCollection = db[colList[counter]]
-        tempColList = tempCollection.find({'gameName': selectedGame})
+    
+    try:
+        while counter < numOfPlayers:
+            tempCollection = db[colList[counter]]
+            tempColList = tempCollection.find({'gameName': selectedGame})
 
-        currentRank = 0
-        currentSkipCount = 0
+            currentRank = 0
+            currentSkipCount = 0
 
-        for x in tempColList:
-            currentRank = x['rank']
-            currentSkipCount = x['skipCount']
-        
-        newRank = currentRank - 2
-        newSkipCount = currentSkipCount + 1
+            for x in tempColList:
+                currentRank = x['rank']
+                currentSkipCount = x['skipCount']
+            
+            newRank = currentRank - 2
+            newSkipCount = currentSkipCount + 1
 
-        if newRank >= 0:
-            changeFilter = {'gameName': selectedGame}
-            editValues = {'$set': {'rank': newRank, 'skipCount': newSkipCount}}
-            tempCollection.update_one(changeFilter, editValues)
+            if newRank >= 0:
+                changeFilter = {'gameName': selectedGame}
+                editValues = {'$set': {'rank': newRank, 'skipCount': newSkipCount}}
+                tempCollection.update_one(changeFilter, editValues)
 
-        counter += 1
+            counter += 1
+    except:
+        print('Could not write to DB...')
+        main()
     
     print('Rank for %s has been reduced.' % selectedGame)
     chooseForMe()
@@ -292,7 +305,7 @@ def weChose():
 
 #Create a function to search for and output the details of a specific game
 def searchForGame():
-    searchCriteria = input('What do you want to search by?\nOptions are:\n1. |Game Name|\n2. |Genre|\n3. |Rank|\n4. |Play Count|\n5. |Skip Count|\n\n6. |Back|\n\n>>> ')
+    searchCriteria = input('What do you want to search by?\nOptions are:\n1. |Game Name|\n2. |Genre|\n3. |Rank|\n4. |Play Count|\n5. |Skip Count|\n\n6. |Back|\n\n>>> ') #Yay for menus
     searchCriteria = searchCriteria.lower()
 
     #Create conditions to search by
@@ -313,7 +326,7 @@ def searchForGame():
                 doEditGame(collection, x['gameName'])
                 doEditBool = False
             elif doEdit == 'no' or doEdit == 'n':
-                main(collection)
+                main()
                 doEditBool = False
             #placeholder
             else:
@@ -376,6 +389,7 @@ def doCont():
             print('Please enter a valid response.')
             doCont()
 
+#Note to self...DO NOT PASS THE THINGY PLEASE AND THANKS
 #Create the main function that allows selection of the function to be executed
 def main():
     #Make a main menu
@@ -402,10 +416,11 @@ def main():
         setFocus()
     elif operation == 'change user' or operation == '7':
         #Close cluster
+        global cluster
         cluster.close()
 
         #Reset global variables
-        cluser = None
+        cluster = None
         db = None
         collection = None
 
@@ -416,12 +431,13 @@ def main():
         print('Please enter a valid option.')
         main()
 
-#Call the main to start after setting the initial DB login and focus
+#Call the login function to start after setting the initial DB login and focus
 login()
 
 """
     I see you looking at this code...It's okay...It can be our little secret ;)
     I just ask that you don't steal anything and pass it off as your own...I worked very hard to teach myself this stuff.
+    If you have any suggestions or bugs, please let me know so I can try to make this program better!
     
     Thank you bby :*
     ~Jay S
@@ -433,3 +449,5 @@ login()
 # - Quick Add Feature...Add all game information from someone elses library into your own
 # - Add new attribute to DB Objects (isMulti)
 # - Make validation for player limit...attribute (maxPlayers)
+# - Add something to validate users for the chooseForMe selection
+# - Add something to stop crash on add game for other libraries
