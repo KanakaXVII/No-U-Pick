@@ -6,9 +6,6 @@
         The game libraries will keep track of game play count, game information, and generate a randomized game based on a game's rank in case
         players become indecisive on what to play.
     
-    Contributors:
-        Nicholas Wilson (Theliara) - Logical Planning Assistance
-        Michael Dermott (Borkle) - Use Case Testing
 """
 
 import pymongo

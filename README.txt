@@ -9,9 +9,8 @@ Contributors:
     Nicholas Wilson (Theliara) - Logical Planning Assistance
     Michael Dermott (Borkle) - Use Case Testing
 
-To use this, first ensure yu have the proper required installations:
+To use this, first ensure you have the proper required requirements:
 
-pip install pymongo
-pip install dnspython
+    pip install -r requirements.txt
 
-Login using the MongoDB credentials given to you by the administrator.
+Check with the administrator to ensure your IP address is registered with the DB. Login using the MongoDB credentials given to you by the administrator.
