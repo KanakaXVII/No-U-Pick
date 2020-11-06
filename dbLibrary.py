@@ -100,7 +100,6 @@ def setFocus():
 #Create the function for adding a new game to the DB
 def addNewGame():
     #Create temporary variables to collect the informatio that will go into the DB
-    gameId = collection.find().count() 
     gameName = input("Game Name:\n>>> ")
     genre = input("\nGenre:\n>>> ")
     subGenre = input("\nSub Genre:\n>>> ")
@@ -114,11 +113,10 @@ def addNewGame():
     
     elif doesExist == None:
         print('\nAdding %s' % gameName)
-        newGamePost = {"_id": gameId, "gameName": gameName, "genre": genre, "subGenre": subGenre, "rank": 100, "skipCount": 0, "playCount": 0, "vendor": vendor}
+        newGamePost = {"gameName": gameName, "genre": genre, "subGenre": subGenre, "rank": 100, "skipCount": 0, "playCount": 0, "vendor": vendor}
         collection.insert_one(newGamePost) 
     
-    #Ask if user wants to continue
-    doCont()
+    main()
 
 #Create function to show list of games
 def showGameList():
@@ -127,8 +125,7 @@ def showGameList():
     for x in fullList:
         print(x['gameName'])
     
-    #Ask if user wants to continue
-    doCont()
+    main()
 
 #Create a function to get a list of players for randomizer
 def getPlayers():
@@ -456,23 +453,6 @@ def doEditGame(collection, gameName):
     collection.update_one(changeFilter, editValues)
         
     main()
-
-#Create a function to ask if the user wants to do something else
-def doCont():
-    doContStr = input('\nDo you want to continue? (Yes/No)\n>>> ')
-
-    doContBool = True
-    while doContBool:
-        if doContStr.lower() == 'yes' or doContStr.lower() == 'y':
-            main()
-        elif doContStr.lower() == 'no' or doContStr.lower() == 'n':
-            print('Happy gaming!')
-            db.logout()
-            exit()
-        else:
-            print('Please enter a valid response.')
-            doContStr = None
-            doCont()
 
 def pickFrom5():
     print('You found me...\nEnter 5 Games...')
