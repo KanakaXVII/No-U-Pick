@@ -218,13 +218,13 @@ def chooseForMe(tempListPlayers):
     
     averageRank = averageRank / len(ranksForGame)
     print('Average Rank: ',averageRank)
-
-    doPlay = random.random() * 100
-    print('Random Generated: ',doPlay)
     
     #Determine if the game passes with random
     doCont = True
     while doCont:
+        doPlay = random.random() * 100
+        print('Random Generated: ',doPlay)
+        
         if doPlay <= averageRank:
             print('%s Passed' % selectedGame)
             doCont = False
