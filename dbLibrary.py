@@ -5,38 +5,83 @@
     Purpose: This program is made to interact with a Mongo DB I created. The app's purpose is to create game libraries for multiple people.
         The game libraries will keep track of game play count, game information, and generate a randomized game based on a game's rank in case
         players become indecisive on what to play.
+
+    Notes: Please refer to the README for instructions on how to set login credentials.
 """
 
 import pymongo
 from pymongo import MongoClient
 import math
 import random
+import myCreds
+import os
 
 #Set some global variables...a secret tool that will help us later 
 collection = None
 db = None
 cluster = None
+loginTimeout = 0
 
 def login():
-    loginUser = input('DB Username: ')
-    password = input('DB Password: ')
+    myCreds.setVar()
+
+    loginUser = os.environ.get('MONGO_USERNAME')
+    loginPass = os.environ.get('MONGO_PASSWORD')
 
     loginURL = r"mongodb+srv://%s:%s@game-library.299lb.mongodb.net/Game-Library?retryWrites=true&w=majority"
-    loginCreds = (loginUser, password)
+    loginCreds = (loginUser, loginPass)
 
     timeoutIter = 1
 
     global cluster
     cluster = MongoClient(loginURL % loginCreds, serverSelectionTimeoutMS=timeoutIter)
 
-    try:
-        cluster.server_info()
-    except:
-        print('\nLogin Failed...\n')
-        login()
+    global loginTimeout
+    if loginTimeout <= 10:
+        try:
+            cluster.server_info()
+        except:
+            loginTimeout += 1
+            login()
+    else:
+        print('Timed Out...')
+        exit()
 
     global db 
     db = cluster["Game-Library"]
+
+    print('Logged in as %s' % loginUser)
+
+    setFocus()
+
+#Manually log in as a different user
+def manLogin():
+    loginUser = input('Username: ')
+    loginPass = input('Password: ')
+
+    loginURL = r"mongodb+srv://%s:%s@game-library.299lb.mongodb.net/Game-Library?retryWrites=true&w=majority"
+    loginCreds = (loginUser, loginPass)
+
+    timeoutIter = 1
+
+    global cluster
+    cluster = MongoClient(loginURL % loginCreds, serverSelectionTimeoutMS=timeoutIter)
+
+    global loginTimeout
+    if loginTimeout <= 10:
+        try:
+            cluster.server_info()
+        except:
+            loginTimeout += 1
+            login()
+    else:
+        print('Timed Out...')
+        exit()
+
+    global db 
+    db = cluster["Game-Library"]
+
+    print('Logged in as %s' % loginUser)
 
     setFocus()
 
@@ -55,7 +100,7 @@ def setFocus():
 #Create the function for adding a new game to the DB
 def addNewGame():
     #Create temporary variables to collect the informatio that will go into the DB
-    gameId = collection.count_documents({})
+    gameId = collection.find().count() 
     gameName = input("Game Name:\n>>> ")
     genre = input("\nGenre:\n>>> ")
     subGenre = input("\nSub Genre:\n>>> ")
@@ -87,23 +132,28 @@ def showGameList():
 
 #Create a function to get a list of players for randomizer
 def getPlayers():
-    print('placeholder')
+    tempListPlayers = []
 
-#Create function to randomize a game based on game ranks and common games in the group
-def chooseForMe():
-    listPlayers = []
-    
     #Get list of people playing
     print('Who is playing? Type "Done" when everyone is entered.\n')
-    
+
     isNotDone = True
     while isNotDone:
         tempInput = input('>>> ')
         if tempInput.lower() == 'done':
             break
         else:
-            listPlayers.append(tempInput)
-    numOfPlayers = len(listPlayers)
+            tempListPlayers.append(tempInput)
+
+    chooseForMe(tempListPlayers)
+
+#Create function to randomize a game based on game ranks and common games in the group
+def chooseForMe(tempListPlayers):
+    listPlayers = []
+    
+    #Call function to get player names
+    listPlayers = tempListPlayers
+    numPlayers = len(listPlayers)
     
     #Pull game lists from multiple users
     colList = []
@@ -115,7 +165,7 @@ def chooseForMe():
     #Weed out uncommon games
     colCount = 0
     finalList = []
-    while colCount < numOfPlayers:
+    while colCount < numPlayers:
         tempList = []
         tempCollection = db[colList[colCount]]
         tempColList = tempCollection.find({})
@@ -127,7 +177,7 @@ def chooseForMe():
             for x in tempList:
                 finalList.append(x)
 
-        elif colCount > 0 and colCount < numOfPlayers:
+        elif colCount > 0 and colCount < numPlayers:
             for x in tempColList:
                 tempList.append(x['gameName'])
 
@@ -149,13 +199,13 @@ def chooseForMe():
     #Pick game at random
     randomSelector = random.randint(0,len(finalList) - 1)
     selectedGame = selectList[randomSelector]
-    print('Random Game: ',selectedGame)
+    print('\nRandom Game: ',selectedGame)
 
     #Pull ranks of game for each person
     ranksForGame = []
     
     rankCounter = 0
-    while rankCounter < numOfPlayers:
+    while rankCounter < numPlayers:
         tempCollection = db[colList[rankCounter]]
         tempColList = tempCollection.find({'gameName': selectedGame})
         
@@ -193,7 +243,7 @@ def chooseForMe():
         #If they don't want to play, send them to the reroll function
         if playGame == 'no' or playGame == 'n':
             playGameBool = False
-            doReroll(colList, numOfPlayers, selectedGame)
+            doReroll(colList, numPlayers, selectedGame, tempListPlayers)
         #If they do want to play, edit the rank and play count of the games
         elif playGame == 'yes' or playGame == 'y':
             playGameBool = False
@@ -204,7 +254,7 @@ def chooseForMe():
             print('Changing rank for %s...' % selectedGame)
 
             try:
-                while counter < numOfPlayers:
+                while counter < numPlayers:
                     tempCollection = db[colList[counter]]
                     tempColList = tempCollection.find({'gameName': selectedGame})
 
@@ -218,19 +268,22 @@ def chooseForMe():
                     newRank = currentRank + 1
                     newPlayCount = currentPlayCount + 1
 
-                    if newRank < 100:
-                        changeFilter = {'gameName': selectedGame}
-                        editValues = {'$set': {'rank': newRank, 'playCount': newPlayCount}}
-                        tempCollection.update_one(changeFilter, editValues)
+                    if newRank >= 100:
+                        newRank = 100
+
+                    changeFilter = {'gameName': selectedGame}
+                    editValues = {'$set': {'rank': newRank, 'playCount': newPlayCount}}
+                    tempCollection.update_one(changeFilter, editValues)
                     
                     counter += 1
+            
+                    print('\nThe rank for %s has been increased! Have fun gaming!\n' % selectedGame)
+                    goToMain = input('\nDo you want to do something else?\n>>> ')
+                    goToMain = goToMain.lower()
+            
             except:
                 print('Could not write to DB...')
                 main()
-            
-            print('\nThe rank for %s has been increased! Have fun gaming!\n' % selectedGame)
-            goToMain = input('\nDo you want to do something else?\n>>> ')
-            goToMain = goToMain.lower()
 
             #Determine if user wants to go to the main menu or not
             goToMainBool = True
@@ -251,10 +304,10 @@ def chooseForMe():
 
 #You can pass the thing just this once. It'll be our secret ;)
 #Create a function to perform the reroll function
-def doReroll(colList, numOfPlayers, selectedGame):
+def doReroll(colList, numOfPlayers, selectedGame, tempListPlayers):
     counter = 0
     
-    print('Rerolling...')
+    print('\nRerolling...')
     
     try:
         while counter < numOfPlayers:
@@ -282,7 +335,7 @@ def doReroll(colList, numOfPlayers, selectedGame):
         main()
     
     print('Rank for %s has been reduced.' % selectedGame)
-    chooseForMe()
+    chooseForMe(tempListPlayers)
 
 #Create a function to alter ranks if the game was predetermined
 def weChose():
@@ -313,25 +366,56 @@ def searchForGame():
         searchString = input('\nGame:\n>>> ')
         searchResult = collection.find({"gameName": searchString})
         
-        #Print the results here instead of the default for more detail
-        for x in searchResult:
-            print('\nGame: ',x['gameName'],'\nVendor: ',x['vendor'],'\nRank: ',x['rank'],'\nSkip Count: ',x['skipCount'],'\nPlay Count: ',x['playCount'],'\n\n')
+        #Check to see if game exists
+        #Placeholder
 
-        doEditBool = True
-        while doEditBool:
-            doEdit = input('Do you want to edit the game?\n>>> ')
-            doEdit = doEdit.lower()
 
-            if doEdit == 'yes' or doEdit == 'y':
-                doEditGame(collection, x['gameName'])
-                doEditBool = False
-            elif doEdit == 'no' or doEdit == 'n':
-                main()
-                doEditBool = False
-            #placeholder
-            else:
-                print('Please enter a valid response...')
-                doEditBool = True
+        contBool = True
+        while contBool:
+            #Print the results here instead of the default for more detail
+            for x in searchResult:
+                print('\nGame: ',x['gameName'],'\nVendor: ',x['vendor'],'\nRank: ',x['rank'],'\nSkip Count: ',x['skipCount'],'\nPlay Count: ',x['playCount'],'\n\n')
+
+            doMoreBool = True
+            while doMoreBool:
+                doMore = input('Do you want to do something to this game?\n\n1. Edit\n2. Delete\n3. Back\n4. Main Menu\n\n>>> ')
+                doMore = doMore.lower()
+
+                if doMore == '1' or doMore == 'edit':
+                    doEditGame(collection, searchString)
+                    doMoreBool = False
+
+                elif doMore == '2' or doMore == 'delete':
+                    valid1 = input('Are you sure you want to delete %s?\n>>> ' % searchString)
+                    valid1 = valid1.lower()
+
+                    delBool = True
+                    while delBool:
+                        if valid1 == 'yes' or valid1 == 'y':
+                            print('Deleting %s...\n' % searchString)
+                            collection.delete_one({'gameName': searchString})
+                            delBool = False
+                            main()
+                        elif valid1 == 'no' or valid1 == 'n':
+                            print('Cancelling...\n')
+                            
+                            for x in searchResult:
+                                print('\nGame: ',x['gameName'],'\nVendor: ',x['vendor'],'\nRank: ',x['rank'],'\nSkip Count: ',x['skipCount'],'\nPlay Count: ',x['playCount'],'\n\n')
+                            
+                            delBool = False
+                        doMoreBool = False
+
+                elif doMore == '3' or doMore == 'back':
+                    searchForGame()
+                    doMoreBool = False
+
+                elif doMore == '4' or doMore == 'main menu' or doMore == 'main' or doMore == 'menu':
+                    main()
+                    doMoreBool = False
+
+                else:
+                    print('Please enter a valid response...')
+                    doMoreBool = True
 
     elif searchCriteria == 'genre' or searchCriteria == '2':
         searchString = input('\nGenre:\n>>> ')
@@ -387,19 +471,36 @@ def doCont():
             exit()
         else:
             print('Please enter a valid response.')
+            doContStr = None
             doCont()
+
+def pickFrom5():
+    print('You found me...\nEnter 5 Games...')
+    yeOleGames = [0] * 5
+    
+    x = 0
+    while x < 5:
+        yeOleGames[x] = input('>>> ')
+        x += 1
+
+    yeOleRando = random.randint(0,4)
+    print('Random: %s' % yeOleRando)
+
+    print('\nYou will play %s.' % yeOleGames[yeOleRando])
+
+    main()
 
 #Note to self...DO NOT PASS THE THINGY PLEASE AND THANKS
 #Create the main function that allows selection of the function to be executed
 def main():
     #Make a main menu
-    operation = input("\nWhat do you want to do?\n\nOptions are:\n1. |Choose for Me|\n2. |Add New Game|\n3. |We Chose Already|\n4. |Show Games|\n5. |Search for Game|\n6. |Change Library|\n7. |Change User|\n8. |Exit|\n\n>>> ")
+    operation = input("\nWhat do you want to do?\n\nOptions are:\n1. Choose for Me\n2. Add New Game\n3. We Chose Already\n4. Show Games\n5. Search for Game\n6. Change Library\n7. Pick From 5\n\n8. Exit\n\n>>> ")
     operation = operation.lower()
 
     #Determine what function to call
     if operation == 'choose for me' or operation == '1':
         print('\nYou chose "Choose For Me".\n')
-        chooseForMe()
+        getPlayers()
     elif operation == 'add new game' or operation == '2':
         print('\nYou chose "Add New Game".\n')
         addNewGame()
@@ -414,7 +515,11 @@ def main():
         searchForGame()
     elif operation == 'change library' or operation == '6':
         setFocus()
-    elif operation == 'change user' or operation == '7':
+    elif operation == 'pick from 5' or operation == '7':
+        pickFrom5()
+    elif operation == 'exit' or operation == '8':
+        exit()
+    elif operation == 'change user':
         #Close cluster
         global cluster
         cluster.close()
@@ -424,9 +529,10 @@ def main():
         db = None
         collection = None
 
-        login()
-    elif operation == 'exit' or operation == '8':
-        exit()
+        global loginTimeout
+        loginTimeout = 0
+
+        manLogin()
     else:
         print('Please enter a valid option.')
         main()
@@ -443,7 +549,7 @@ login()
     ~Jay S
 """
 
-# Ideas:
+# To Do:
 # - Show genre list in search
 # - Instead of "show games", you can do a selection to show an input
 # - Quick Add Feature...Add all game information from someone elses library into your own
@@ -451,3 +557,8 @@ login()
 # - Make validation for player limit...attribute (maxPlayers)
 # - Add something to validate users for the chooseForMe selection
 # - Add something to stop crash on add game for other libraries
+# - Add try/except to addNewGame to prevent crash
+# - Remove doCont
+# - Add removeGame() function
+# - Move the player name input outside of the chooseForMe function
+# - Make it impossible to not enter any players to prevent a crash

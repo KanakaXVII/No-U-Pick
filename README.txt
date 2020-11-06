@@ -14,3 +14,5 @@ To use this, first ensure you have the proper required requirements:
     pip install -r requirements.txt
 
 Check with the administrator to ensure your IP address is registered with the DB. Login using the MongoDB credentials given to you by the administrator.
+
+To set login credentials, open the "myCreds.py" in a text editor and enter your username and password between the double quotation marks ("") and save the file. This will permanently set your login credentials for the app.
